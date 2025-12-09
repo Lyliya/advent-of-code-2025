@@ -107,7 +107,7 @@ fn check_corners(a: Point, b: Point, edges: &Vec<Point>) -> bool {
     corners.iter().all(|corner| check_point_in_polygon(*corner, edges))
 }
 
-fn check_segment(a: Point, b: Point, edges: &Vec<Point>) -> bool {
+fn check_rectangle(a: Point, b: Point, edges: &Vec<Point>) -> bool {
     for i in 0..edges.len() {
         let c = edges[i];
         let d = edges[(i + 1) % edges.len()];
@@ -143,17 +143,21 @@ fn step2(lines: &[&str]) -> i64 {
 
     for (index, coord) in coords.iter().enumerate() {
         for i in index + 1..coords.len() {
-            if check_segment(coords[i],*coord, &coords) {
-                let dx = (coords[i].x - coord.x).abs();
-                let dy = (coords[i].y - coord.y).abs();
-                let area = (dx + 1) * (dy + 1);
-                areas.push((area, *coord, coords[i]));
-            }
+            let dx = (coords[i].x - coord.x).abs();
+            let dy = (coords[i].y - coord.y).abs();
+            let area = (dx + 1) * (dy + 1);
+            areas.push((area, *coord, coords[i]));
         }
     }
 
     areas.sort_by(|(a,_,_), (b,_,_)| b.cmp(a));
-    areas[0].0
+
+    for i in 0..areas.len() {
+        if check_rectangle(areas[i].1, areas[i].2, &coords) {
+            return areas[i].0
+        }
+    }
+    panic!("Invalid rectangles")
 }
 
 
