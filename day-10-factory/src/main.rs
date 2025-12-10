@@ -1,80 +1,100 @@
+// Based on https://github.com/MizardX/AdventOfCode_2025/blob/main/src/day_10.rs answer for using microlp in step 2
+
 use std::io;
 use std::io::Read;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
+use microlp::{LinearExpr, OptimizationDirection, Problem, ComparisonOp};
 use timer;
 
-fn parse_button(button: &str) -> Vec<usize> {
-    let nums: Vec<usize> = button.trim_start_matches('(')
-        .trim_end_matches(')')
-        .split(',')
-        .filter_map(|s| s.parse().ok())
-        .collect();
+fn parse_goal(goal: &str) -> u16 {
+    let mut bin = 0;
 
-    nums
+    for (i, c) in goal[1..goal.len() - 1].chars().enumerate() {
+        if c == '#' {
+            bin |= 1 << i;
+        }
+    }
+
+    bin
 }
 
-fn merge(items: Vec<Vec<usize>>) -> Vec<usize> {
-    let mut res = HashSet::new();
+fn parse_button(button: &str) -> u16 {
+    let mut bin = 0;
+    for num in button[1..button.len() - 1].split(',').collect::<Vec<&str>>() {
+        if let Ok(bit) = num.parse::<u32>() {
+            bin |= 1 << bit;
+        }
+    }
 
-    for vec in items {
-        for n  in vec {
-            if res.contains(&n) {
-                res.remove(&n);
-            } else {
-                res.insert(n);
+    bin
+}
+
+fn bfs(goal: u16, button: &Vec<u16>) -> u16 {
+    let mut queue: VecDeque<(u16, u16)> = VecDeque::new();
+    queue.push_back((0, 0));
+
+    let mut visited = HashSet::new();
+    visited.insert(0);
+
+    while let Some((curr, steps)) = queue.pop_front() {
+        if curr == goal {
+            return steps;
+        }
+
+        for mask in button {
+            let next = curr ^ mask;
+            if visited.insert(next) {
+                queue.push_back((next, steps + 1));
             }
         }
     }
 
-    let mut res: Vec<usize> = res.into_iter().collect();
-    res.sort();
-    res
+    0
 }
 
-fn combinations<T: Clone>(items: &[T], k: usize) -> Vec<Vec<T>> {
-    if k == 0 { return vec![vec![]]; }
-    if items.len() < k { return vec![]; }
-
-    let mut res = vec![];
-    let first = items[0].clone();
-
-    for mut c in combinations(&items[1..], k - 1) {
-        c.insert(0, first.clone());
-        res.push(c);
-    }
-
-    res.extend(combinations(&items[1..], k));
-
-    res
-}
-
-fn check_depth(goal: &Vec<usize>, button: &Vec<Vec<usize>>, depth: usize) -> bool {
-    let c: Vec<Vec<usize>> = combinations(button, depth).into_iter().map(|v| merge(v)).collect();
-
-    c.contains(goal)
-}
-
-fn found_combination_depth(goal: &Vec<usize>, button: &Vec<Vec<usize>>) -> usize {
-    for i in 1..100 {
-        if check_depth(&goal, &button, i) {
-            return i;
-        }
-    }
-    panic!("No combination found");
-}
-
-fn step1(lines: &[&str]) -> usize {
+fn step1(lines: &[&str]) -> u16 {
     let mut answer = 0;
 
     for line in lines {
         let split: Vec<&str> = line.trim().split(" ").collect();
-
-        let goal: Vec<_> = split[0].trim_start_matches('[').trim_end_matches(']').chars().collect();
+        let goal = parse_goal(split[0]);
         let button: Vec<_> = split[1..split.len() - 1].iter().map(|v| parse_button(&v)).collect();
 
-        let goal_nums: Vec<usize> = goal.iter().enumerate().filter_map(|(i, v)| if *v == '#' { Some(i)} else { None }).collect();
+        answer += bfs(goal, &button);
+    }
+    answer
+}
 
-        answer += found_combination_depth(&goal_nums, &button);
+fn solve_lp(button: &Vec<u16>, goal: &Vec<u16>) -> u32 {
+    let mut problem = Problem::new(OptimizationDirection::Minimize);
+    let max = goal.iter().max().unwrap();
+    let button_vars = button
+        .iter()
+        .map(|_| problem.add_integer_var(1.0, (0, i32::from(*max))))
+        .collect::<Vec<_>>();
+
+    for (light_ix, &trg) in goal.iter().enumerate() {
+        let mut expr = LinearExpr::empty();
+        for (btn_mask, &btn_var) in button.iter().zip(&button_vars) {
+            if btn_mask & (1 << light_ix) != 0 {
+                expr.add(btn_var, 1.0);
+            }
+        }
+        problem.add_constraint(expr, ComparisonOp::Eq, f64::from(trg));
+    }
+    problem.solve().unwrap().objective().round() as u32
+}
+
+fn step2(lines: &[&str]) -> u32 {
+    let mut answer = 0;
+
+    for line in lines {
+        let split: Vec<&str> = line.trim().split(" ").collect();
+        let goal_str = split[split.len() - 1];
+        let goal: Vec<u16> = goal_str[1..goal_str.len() - 1].split(',').filter_map(|v| v.parse::<u16>().ok()).collect();
+        let buttons: Vec<u16> = split[1..split.len() - 1].iter().map(|v| parse_button(&v)).collect();
+
+        answer += solve_lp(&buttons, &goal);
     }
     answer
 }
@@ -89,6 +109,6 @@ fn main() {
     let (step1_answer, step1_time) = timer::measure(|| step1(&lines));
     println!("Step 1 answer: {}, in {:?}", step1_answer, step1_time);
     
-    // let (step2_answer, step2_time) = timer::measure(|| step2(&lines));
-    // println!("Step 2 answer: {}, in {:?}", step2_answer, step2_time);
+    let (step2_answer, step2_time) = timer::measure(|| step2(&lines));
+    println!("Step 2 answer: {}, in {:?}", step2_answer, step2_time);
 }
