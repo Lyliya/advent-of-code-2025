@@ -1,0 +1,7 @@
+[package]
+name = "day-12-christmas-tree-farm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+timer = { path = "../timer" }
